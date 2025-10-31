@@ -1,0 +1,66 @@
+local config = require("vimsurf.config")
+local completion = require("vimsurf.completion")
+local render = require("vimsurf.render")
+local commands = require("vimsurf.commands")
+local utils = require("vimsurf.utils")
+
+local M = {}
+
+---Setup VimSurf
+---@param opts VimSurfConfig?
+function M.setup(opts)
+  -- Setup configuration
+  config.setup(opts)
+  
+  -- Setup highlights
+  render.setup_highlights()
+  
+  -- Setup commands
+  commands.setup_commands()
+  
+  -- Setup autocommands
+  local group = vim.api.nvim_create_augroup("VimSurf", { clear = true })
+  
+  -- Trigger completion on text change in insert mode
+  vim.api.nvim_create_autocmd({ "TextChangedI", "CursorMovedI" }, {
+    group = group,
+    callback = function()
+      completion.trigger()
+    end,
+  })
+  
+  -- Clear completion when leaving insert mode
+  vim.api.nvim_create_autocmd("InsertLeave", {
+    group = group,
+    callback = function()
+      completion.clear()
+    end,
+  })
+  
+  -- Clear when entering command mode
+  vim.api.nvim_create_autocmd("ModeChanged", {
+    group = group,
+    pattern = "i:*",
+    callback = function()
+      completion.clear()
+    end,
+  })
+  
+  -- Re-setup highlights on colorscheme change
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = group,
+    callback = function()
+      render.setup_highlights()
+    end,
+  })
+  
+  utils.debug("VimSurf initialized")
+end
+
+-- Export API functions
+M.accept = completion.accept
+M.accept_word = completion.accept_word
+M.accept_line = completion.accept_line
+M.clear = completion.clear
+
+return M

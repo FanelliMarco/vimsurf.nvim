@@ -1,0 +1,17 @@
+# Neovim
+*.swp
+*.swo
+*~
+
+# Lua
+luac.out
+
+# MacOS
+.DS_Store
+
+# Logs
+*.log
+
+# Test files
+test/
+tests/
