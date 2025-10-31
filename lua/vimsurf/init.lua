@@ -54,7 +54,7 @@ function M.setup(opts)
     end,
   })
   
-  utils.debug("VimSurf initialized")
+  utils.debug("VimSurf initialized with Code-Arena backend")
 end
 
 -- Export API functions
@@ -62,5 +62,8 @@ M.accept = completion.accept
 M.accept_word = completion.accept_word
 M.accept_line = completion.accept_line
 M.clear = completion.clear
+M.cycle = completion.cycle
+M.cycle_next = function() completion.cycle(1) end
+M.cycle_prev = function() completion.cycle(-1) end
 
 return M

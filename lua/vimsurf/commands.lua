@@ -43,11 +43,22 @@ end
 function M.status()
   local status = config.options.enabled and "enabled" or "disabled"
   utils.info(string.format(
-    "Status: %s\nModel: %s\nAPI: %s",
+    "Status: %s\nUser ID: %s\nPrivacy: %s\nAPI: %s",
     status,
-    config.options.model,
+    config.options.user_id,
+    config.options.privacy,
     config.options.api_url
   ))
+end
+
+---Cycle to next completion
+function M.cycle_next()
+  completion.cycle(1)
+end
+
+---Cycle to previous completion
+function M.cycle_prev()
+  completion.cycle(-1)
 end
 
 ---Setup user commands
@@ -66,14 +77,18 @@ function M.setup_commands()
       M.toggle()
     elseif cmd == "status" then
       M.status()
+    elseif cmd == "next" then
+      M.cycle_next()
+    elseif cmd == "prev" then
+      M.cycle_prev()
     else
       utils.error("Unknown command: " .. cmd)
-      utils.info("Available commands: list_models, enable, disable, toggle, status")
+      utils.info("Available: list_models, enable, disable, toggle, status, next, prev")
     end
   end, {
     nargs = 1,
     complete = function()
-      return { "list_models", "enable", "disable", "toggle", "status" }
+      return { "list_models", "enable", "disable", "toggle", "status", "next", "prev" }
     end,
   })
 end

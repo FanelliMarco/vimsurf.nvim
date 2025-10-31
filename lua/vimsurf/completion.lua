@@ -8,9 +8,12 @@ local M = {}
 -- Completion state
 M.state = {
   timer = vim.loop.new_timer(),
-  current = nil,  -- Current completion text
-  request_id = 0, -- Request counter
+  completions = nil,  -- Array of completions from different models
+  current_index = 1,  -- Current completion being shown
+  pair_id = nil,      -- Pair ID from API
+  request_id = 0,     -- Request counter
   pending = false,
+  cursor_pos = nil,   -- Cursor position when completion was requested
 }
 
 ---Check if completions should be shown
@@ -38,7 +41,7 @@ function M.should_complete()
   return true
 end
 
----Request completion from API
+---Request completions from API
 function M.request()
   if not M.should_complete() then
     return
@@ -51,14 +54,15 @@ function M.request()
   
   local prefix, suffix = utils.get_context()
   local row, col = utils.get_cursor()
+  M.state.cursor_pos = { row = row, col = col }
   
-  utils.debug("Requesting completion (ID: " .. request_id .. ")")
+  utils.debug("Requesting completions (ID: " .. request_id .. ")")
   
   if config.options.show_label then
-    render.show_label("🏄 ...", row)
+    render.show_label("🏄 surfing...", row)
   end
   
-  api.get_completion(prefix, suffix, function(completion)
+  api.get_completions(prefix, suffix, function(completions, pair_id)
     M.state.pending = false
     
     -- Ignore outdated requests
@@ -67,23 +71,66 @@ function M.request()
       return
     end
     
-    if completion and completion ~= "" then
-      -- Store completion
-      M.state.current = {
-        text = completion,
-        row = row,
-        col = col,
-      }
+    if completions and #completions > 0 then
+      -- Store completions
+      M.state.completions = completions
+      M.state.current_index = 1
+      M.state.pair_id = pair_id
       
-      -- Render it
-      render.show(completion, row, col)
-      utils.debug("Completion displayed")
+      -- Show first completion
+      M.show_current()
+      utils.debug("Received " .. #completions .. " completions")
     else
-      M.state.current = nil
+      M.state.completions = nil
       render.clear()
-      utils.debug("No completion received")
+      utils.debug("No completions received")
     end
   end)
+end
+
+---Show current completion
+function M.show_current()
+  if not M.state.completions or #M.state.completions == 0 then
+    return
+  end
+  
+  local completion = M.state.completions[M.state.current_index]
+  local row = M.state.cursor_pos.row
+  local col = M.state.cursor_pos.col
+  
+  -- Render completion
+  render.show(completion.text, row, col)
+  
+  -- Show label with model info
+  if config.options.show_label then
+    local label = string.format(
+      "🏄 %d/%d [%s]",
+      M.state.current_index,
+      #M.state.completions,
+      completion.model
+    )
+    render.show_label(label, row)
+  end
+end
+
+---Cycle to next/previous completion
+---@param direction integer 1 for next, -1 for previous
+function M.cycle(direction)
+  if not M.state.completions or #M.state.completions <= 1 then
+    return
+  end
+  
+  direction = direction or 1
+  M.state.current_index = M.state.current_index + direction
+  
+  -- Wrap around
+  if M.state.current_index > #M.state.completions then
+    M.state.current_index = 1
+  elseif M.state.current_index < 1 then
+    M.state.current_index = #M.state.completions
+  end
+  
+  M.show_current()
 end
 
 ---Trigger completion with debounce
@@ -104,13 +151,13 @@ function M.trigger()
   )
 end
 
----Accept the full completion
+---Accept the current completion
 function M.accept()
-  if not M.state.current then
+  if not M.state.completions or M.state.current_index > #M.state.completions then
     return
   end
   
-  local completion = M.state.current
+  local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
   -- Insert completion
@@ -131,17 +178,25 @@ function M.accept()
     utils.set_cursor(row + #lines - 1, #lines[#lines] - #current_line:sub(col + 1))
   end
   
+  -- Report outcome if enabled
+  if config.options.report_outcomes and M.state.pair_id and #M.state.completions == 2 then
+    local chosen = completion.completion_id
+    local other_idx = M.state.current_index == 1 and 2 or 1
+    local other = M.state.completions[other_idx].completion_id
+    api.report_outcome(M.state.pair_id, chosen, other)
+  end
+  
   M.clear()
-  utils.debug("Completion accepted")
+  utils.info("Accepted: " .. completion.model)
 end
 
 ---Accept only one word
 function M.accept_word()
-  if not M.state.current then
+  if not M.state.completions then
     return
   end
   
-  local completion = M.state.current
+  local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
   -- Extract first word
@@ -155,16 +210,15 @@ function M.accept_word()
   end
   
   M.clear()
-  utils.debug("Word accepted")
 end
 
 ---Accept only current line
 function M.accept_line()
-  if not M.state.current then
+  if not M.state.completions then
     return
   end
   
-  local completion = M.state.current
+  local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
   -- Extract first line
@@ -178,14 +232,16 @@ function M.accept_line()
   end
   
   M.clear()
-  utils.debug("Line accepted")
 end
 
 ---Clear completion
 function M.clear()
   M.state.timer:stop()
-  M.state.current = nil
+  M.state.completions = nil
+  M.state.current_index = 1
+  M.state.pair_id = nil
   M.state.pending = false
+  M.state.cursor_pos = nil
   render.clear()
 end
 
