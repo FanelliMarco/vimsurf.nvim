@@ -8,12 +8,14 @@ local M = {}
 -- Completion state
 M.state = {
   timer = vim.loop.new_timer(),
-  completions = nil,  -- Array of completions from different models
-  current_index = 1,  -- Current completion being shown
-  pair_id = nil,      -- Pair ID from API
-  request_id = 0,     -- Request counter
+  completions = nil,
+  current_index = 1,
+  pair_id = nil,
+  request_id = 0,
   pending = false,
-  cursor_pos = nil,   -- Cursor position when completion was requested
+  cursor_pos = nil,
+  ignore_next_change = false, -- NEW: Flag to ignore next text change
+  last_request_time = 0,      -- NEW: Track request timing
 }
 
 ---Check if completions should be shown
@@ -23,18 +25,30 @@ function M.should_complete()
     return false
   end
   
+  -- NEW: Respect ignore flag
+  if M.state.ignore_next_change then
+    utils.debug("Ignoring change event (post-acceptance)")
+    M.state.ignore_next_change = false
+    return false
+  end
+  
   local ft = vim.bo.filetype
   if not config.is_filetype_enabled(ft) then
     return false
   end
   
-  -- Don't complete in special buffers
   if vim.bo.buftype ~= "" then
     return false
   end
   
-  -- Must be in insert mode
   if vim.fn.mode() ~= "i" then
+    return false
+  end
+  
+  -- NEW: Rate limiting (min 500ms between requests)
+  local now = vim.loop.now()
+  if now - M.state.last_request_time < 500 then
+    utils.debug("Rate limiting: too soon since last request")
     return false
   end
   
@@ -48,6 +62,7 @@ function M.request()
   end
   
   M.state.request_id = M.state.request_id + 1
+  M.state.last_request_time = vim.loop.now()
   local request_id = M.state.request_id
   
   M.state.pending = true
@@ -72,12 +87,10 @@ function M.request()
     end
     
     if completions and #completions > 0 then
-      -- Store completions
       M.state.completions = completions
       M.state.current_index = 1
       M.state.pair_id = pair_id
       
-      -- Show first completion
       M.show_current()
       utils.debug("Received " .. #completions .. " completions")
     else
@@ -98,10 +111,8 @@ function M.show_current()
   local row = M.state.cursor_pos.row
   local col = M.state.cursor_pos.col
   
-  -- Render completion
   render.show(completion.text, row, col)
   
-  -- Show label with model info
   if config.options.show_label then
     local label = string.format(
       "🏄 %d/%d [%s]",
@@ -123,7 +134,6 @@ function M.cycle(direction)
   direction = direction or 1
   M.state.current_index = M.state.current_index + direction
   
-  -- Wrap around
   if M.state.current_index > #M.state.completions then
     M.state.current_index = 1
   elseif M.state.current_index < 1 then
@@ -160,17 +170,18 @@ function M.accept()
   local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
+  -- NEW: Set flag to ignore next change
+  M.state.ignore_next_change = true
+  
   -- Insert completion
   local current_line = vim.api.nvim_get_current_line()
   local lines = vim.split(completion.text, "\n", { plain = true })
   
   if #lines == 1 then
-    -- Single line
     local new_line = current_line:sub(1, col) .. lines[1] .. current_line:sub(col + 1)
     utils.set_lines(row, row + 1, { new_line })
     utils.set_cursor(row, col + #lines[1])
   else
-    -- Multi-line
     lines[1] = current_line:sub(1, col) .. lines[1]
     lines[#lines] = lines[#lines] .. current_line:sub(col + 1)
     
@@ -187,7 +198,10 @@ function M.accept()
   end
   
   M.clear()
-  utils.info("Accepted: " .. completion.model)
+  
+  if not config.options.silent then
+    utils.info("Accepted: " .. completion.model)
+  end
 end
 
 ---Accept only one word
@@ -199,7 +213,9 @@ function M.accept_word()
   local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
-  -- Extract first word
+  -- NEW: Set flag to ignore next change
+  M.state.ignore_next_change = true
+  
   local word = completion.text:match("^%S+") or ""
   
   if word ~= "" then
@@ -221,7 +237,9 @@ function M.accept_line()
   local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
-  -- Extract first line
+  -- NEW: Set flag to ignore next change
+  M.state.ignore_next_change = true
+  
   local first_line = completion.text:match("^[^\n]*") or ""
   
   if first_line ~= "" then

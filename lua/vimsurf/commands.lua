@@ -42,12 +42,22 @@ end
 ---Show status
 function M.status()
   local status = config.options.enabled and "enabled" or "disabled"
+  local stats = api.get_stats()
+  
+  local success_rate = 0
+  if stats.total_requests > 0 then
+    success_rate = math.floor((stats.success_count / stats.total_requests) * 100)
+  end
+  
   utils.info(string.format(
-    "Status: %s\nUser ID: %s\nPrivacy: %s\nAPI: %s",
+    "Status: %s\nUser ID: %s\nPrivacy: %s\nAPI: %s\nRequests: %d (Success: %d%%, Errors: %d)",
     status,
     config.options.user_id,
     config.options.privacy,
-    config.options.api_url
+    config.options.api_url,
+    stats.total_requests,
+    success_rate,
+    stats.error_500_count
   ))
 end
 

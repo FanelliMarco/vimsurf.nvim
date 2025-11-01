@@ -45,25 +45,51 @@ A lightweight, asynchronous code completion plugin for Neovim that leverages Cod
   dependencies = { "nvim-lua/plenary.nvim" },
   event = "InsertEnter",
   config = function()
+    -- Optional: Enable debug mode
+    -- vim.g.vimsurf_debug = true
+    
     require("vimsurf").setup({
-      model = "claude-3-5-sonnet-20241022",
+      -- IMPORTANT: Use a unique user_id (not "test-user-123")
+      user_id = "your-unique-id-here",  -- Change this!
+      
+      -- Try "Private" or "Research" if Debug is too rate-limited
+      privacy = "Private",  -- "Private", "Debug", or "Research"
+      
+      -- Don't spam errors (Code-Arena is flaky)
+      silent = true,
+      
+      -- Retry 500 errors automatically
+      max_retries = 2,
+      
+      -- Longer debounce to reduce request frequency
+      debounce_ms = 400,
     })
     
     -- Keymaps
     vim.keymap.set("i", "<C-g>", function()
       require("vimsurf").accept()
-    end, { desc = "Accept completion" })
+    end, { desc = "VimSurf: Accept" })
     
-    vim.keymap.set("i", "<C-w>", function()
-      require("vimsurf").accept_word()
-    end, { desc = "Accept word" })
+    vim.keymap.set("i", "<C-n>", function()
+      require("vimsurf").cycle_next()
+    end, { desc = "VimSurf: Next model" })
     
-    vim.keymap.set("i", "<C-l>", function()
-      require("vimsurf").accept_line()
-    end, { desc = "Accept line" })
-    
-    vim.keymap.set("i", "<C-x>", function()
-      require("vimsurf").clear()
-    end, { desc = "Clear completion" })
+    vim.keymap.set("i", "<C-p>", function()
+      require("vimsurf").cycle_prev()
+    end, { desc = "VimSurf: Prev model" })
   end,
 }
+```
+### Check Success Rate
+Vim
+```vim
+:VimSurf status
+```
+Shows:
+```text
+
+Status: enabled
+User ID: your-id
+Privacy: Private
+Requests: 50 (Success: 65%, Errors: 17)
+```

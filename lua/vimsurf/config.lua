@@ -9,6 +9,8 @@ local M = {}
 ---@field temperature number
 ---@field debounce_ms integer
 ---@field show_label boolean
+---@field silent boolean
+---@field max_retries integer
 ---@field cycle_on_complete boolean
 ---@field report_outcomes boolean
 ---@field filetypes table<string, boolean>
@@ -18,13 +20,15 @@ M.defaults = {
   enabled = true,
   api_url = "https://code-arena.fly.dev",
   user_id = "vimsurf-user",
-  privacy = "Debug", -- "Private", "Debug", or "Research"
+  privacy = "Debug",
   max_tokens = 100,
   temperature = 0.2,
-  debounce_ms = 200,
+  debounce_ms = 300,  -- Increased from 200ms
   show_label = true,
-  cycle_on_complete = true, -- Auto-cycle through models
-  report_outcomes = false, -- Report which completion was accepted
+  silent = false,     -- NEW: Don't spam error messages
+  max_retries = 2,    -- NEW: Retry 500 errors
+  cycle_on_complete = true,
+  report_outcomes = false,
   filetypes = {
     help = false,
     gitcommit = false,
@@ -49,6 +53,14 @@ function M.setup(opts)
       vim.log.levels.WARN
     )
     M.options.privacy = "Debug"
+  end
+  
+  -- Warn about Debug mode
+  if M.options.privacy == "Debug" and not M.options.silent then
+    vim.notify(
+      "VimSurf: Using 'Debug' privacy mode (may be rate-limited). Consider 'Private' or 'Research'.",
+      vim.log.levels.INFO
+    )
   end
 end
 
