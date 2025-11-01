@@ -14,9 +14,16 @@ M.state = {
   request_id = 0,
   pending = false,
   cursor_pos = nil,
-  ignore_next_change = false, -- NEW: Flag to ignore next text change
-  last_request_time = 0,      -- NEW: Track request timing
+  ignore_next_change = false,
+  last_request_time = 0,
 }
+
+---Check if we're in insert mode
+---@return boolean
+local function is_insert_mode()
+  local mode = vim.api.nvim_get_mode().mode
+  return mode == "i" or mode == "ic" or mode == "ix"
+end
 
 ---Check if completions should be shown
 ---@return boolean
@@ -25,7 +32,12 @@ function M.should_complete()
     return false
   end
   
-  -- NEW: Respect ignore flag
+  -- Check insert mode first
+  if not is_insert_mode() then
+    return false
+  end
+  
+  -- FIXED: Actually use the ignore flag
   if M.state.ignore_next_change then
     utils.debug("Ignoring change event (post-acceptance)")
     M.state.ignore_next_change = false
@@ -41,11 +53,7 @@ function M.should_complete()
     return false
   end
   
-  if vim.fn.mode() ~= "i" then
-    return false
-  end
-  
-  -- NEW: Rate limiting (min 500ms between requests)
+  -- Rate limiting
   local now = vim.loop.now()
   if now - M.state.last_request_time < 500 then
     utils.debug("Rate limiting: too soon since last request")
@@ -80,6 +88,12 @@ function M.request()
   api.get_completions(prefix, suffix, function(completions, pair_id)
     M.state.pending = false
     
+    -- FIXED: Ignore responses when not in insert mode
+    if not is_insert_mode() then
+      utils.debug("Ignoring response (not in insert mode)")
+      return
+    end
+    
     -- Ignore outdated requests
     if request_id ~= M.state.request_id then
       utils.debug("Ignoring outdated request " .. request_id)
@@ -104,6 +118,12 @@ end
 ---Show current completion
 function M.show_current()
   if not M.state.completions or #M.state.completions == 0 then
+    return
+  end
+  
+  -- FIXED: Double-check we're still in insert mode before rendering
+  if not is_insert_mode() then
+    utils.debug("Not showing completion (not in insert mode)")
     return
   end
   
@@ -170,8 +190,9 @@ function M.accept()
   local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
-  -- NEW: Set flag to ignore next change
+  -- Set flag to ignore next change
   M.state.ignore_next_change = true
+  utils.debug("Set ignore_next_change flag")
   
   -- Insert completion
   local current_line = vim.api.nvim_get_current_line()
@@ -213,8 +234,8 @@ function M.accept_word()
   local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
-  -- NEW: Set flag to ignore next change
   M.state.ignore_next_change = true
+  utils.debug("Set ignore_next_change flag")
   
   local word = completion.text:match("^%S+") or ""
   
@@ -237,8 +258,8 @@ function M.accept_line()
   local completion = M.state.completions[M.state.current_index]
   local row, col = utils.get_cursor()
   
-  -- NEW: Set flag to ignore next change
   M.state.ignore_next_change = true
+  utils.debug("Set ignore_next_change flag")
   
   local first_line = completion.text:match("^[^\n]*") or ""
   

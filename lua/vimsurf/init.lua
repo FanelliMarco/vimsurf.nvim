@@ -29,19 +29,15 @@ function M.setup(opts)
     end,
   })
   
-  -- Clear completion when leaving insert mode
-  vim.api.nvim_create_autocmd("InsertLeave", {
-    group = group,
-    callback = function()
-      completion.clear()
-    end,
-  })
+  -- REMOVED: InsertLeave autocmd (redundant with ModeChanged)
+  -- The ModeChanged pattern "i:*" handles leaving insert mode
   
-  -- Clear when entering command mode
+  -- Clear when leaving insert mode (any transition from insert)
   vim.api.nvim_create_autocmd("ModeChanged", {
     group = group,
-    pattern = "i:*",
+    pattern = "i*:*",  -- Any transition FROM insert mode
     callback = function()
+      utils.debug("Left insert mode, clearing completions")
       completion.clear()
     end,
   })
