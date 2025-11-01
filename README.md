@@ -41,42 +41,27 @@ A lightweight, asynchronous code completion plugin for Neovim that leverages Cod
 
 ```lua
 {
-  "yourusername/vimsurf",
+  "FanelliMarco/vimsurf.nvim",
   dependencies = { "nvim-lua/plenary.nvim" },
-  event = "InsertEnter",
+  lazy = false,  -- Load on startup (recommended)
   config = function()
-    -- Optional: Enable debug mode
-    -- vim.g.vimsurf_debug = true
-    
     require("vimsurf").setup({
-      -- IMPORTANT: Use a unique user_id (not "test-user-123")
-      user_id = "your-unique-id-here",  -- Change this!
-      
-      -- Try "Private" or "Research" if Debug is too rate-limited
-      privacy = "Private",  -- "Private", "Debug", or "Research"
-      
-      -- Don't spam errors (Code-Arena is flaky)
-      silent = true,
-      
-      -- Retry 500 errors automatically
-      max_retries = 2,
-      
-      -- Longer debounce to reduce request frequency
-      debounce_ms = 400,
+      user_id = "your-unique-id",  -- Change this!
+      privacy = "Private",
     })
     
     -- Keymaps
     vim.keymap.set("i", "<C-g>", function()
       require("vimsurf").accept()
-    end, { desc = "VimSurf: Accept" })
+    end, { desc = "Accept completion" })
     
     vim.keymap.set("i", "<C-n>", function()
       require("vimsurf").cycle_next()
-    end, { desc = "VimSurf: Next model" })
+    end, { desc = "Next model" })
     
     vim.keymap.set("i", "<C-p>", function()
       require("vimsurf").cycle_prev()
-    end, { desc = "VimSurf: Prev model" })
+    end, { desc = "Prev model" })
   end,
 }
 ```
